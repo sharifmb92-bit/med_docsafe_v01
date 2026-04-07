@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"/>
+    <title>DocSafe 🛡️ Menorca</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0" rel="stylesheet" />
+    <style>
+        [x-cloak] { display: none !important; }
+        body { background-color: #0f172a; color: #f1f5f9; font-family: sans-serif; overflow-x: hidden; }
+        .card-doc { background: #1e293b; border-radius: 1.2rem; border: 1px solid #334155; }
+        .expiry-warning { border-left: 5px solid #ef4444; background: #450a0a; }
+        .nomina-style { border-left: 5px solid #22c55e; }
+        input, select { background: #0f172a !important; border: 1px solid #334155 !important; color: white !important; }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+    </style>
+</head>
+<body x-data="docApp()" x-init="init()" class="pb-20">
+
+    <header class="p-6 flex justify-between items-center bg-slate-900/80 backdrop-blur-md sticky top-0 z-10 border-b border-white/5">
+        <div>
+            <h1 class="text-2xl font-black tracking-tighter">DocSafe <span class="text-blue-500">🛡️</span></h1>
+            <p class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Caja Fuerte Personal</p>
+        </div>
+        <button @click="showEditor = !showEditor" class="bg-blue-600 p-3 rounded-2xl shadow-xl">
+            <span class="material-symbols-outlined text-white" x-text="showEditor ? 'close' : 'add_circle'"></span>
+        </button>
+    </header>
+
+    <main class="p-4 space-y-6">
+        <section x-show="showEditor" x-transition x-cloak class="card-doc p-5 space-y-4 shadow-2xl">
+            <h2 class="text-sm font-black text-blue-400 uppercase">Nuevo Documento</h2>
+            <div class="space-y-3">
+                <input type="text" x-model="nuevo.nombre" placeholder="Nombre (Nómina Abril, DNI...)" class="w-full p-3 rounded-xl text-sm outline-none">
+                <select x-model="nuevo.categoria" class="w-full p-3 rounded-xl text-sm outline-none">
+                    <template x-for="cat in categorias.filter(c => c !== 'TODOS')">
+                        <option :value="cat" x-text="cat"></option>
+                    </template>
+                </select>
+                <div class="flex flex-col gap-1">
+                    <label class="text-[9px] font-bold text-slate-500 uppercase ml-2">Fecha Caducidad / Emisión</label>
+                    <input type="date" x-model="nuevo.fecha" class="w-full p-3 rounded-xl text-sm outline-none">
+                </div>
+                
+                <div class="grid grid-cols-2 gap-3 pt-2">
+                    <button @click="capturar()" class="py-4 bg-blue-600 rounded-2xl font-black text-white uppercase text-[10px] flex flex-col items-center justify-center gap-1 shadow-lg">
+                        <span class="material-symbols-outlined">camera_alt</span> Cámara
+                    </button>
+                    <label class="py-4 bg-slate-700 rounded-2xl font-black text-white uppercase text-[10px] flex flex-col items-center justify-center gap-1 cursor-pointer shadow-lg border border-white/10">
+                        <span class="material-symbols-outlined">upload_file</span> Subir PDF/Foto
+                        <input type="file" class="hidden" @change="subirArchivo($event)">
+                    </label>
+                </div>
+            </div>
+        </section>
+
+        <div class="flex gap-2 overflow-x-auto no-scrollbar py-2">
+            <template x-for="cat in categorias">
+                <button @click="filtro = cat" 
+                        :class="filtro === cat ? 'bg-blue-600 text-white' : 'bg-slate-800 text-slate-400'"
+                        class="px-5 py-2 rounded-full text-[11px] font-black whitespace-nowrap uppercase transition-all" 
+                        x-text="cat"></button>
+            </template>
+        </div>
+
+        <div class="grid gap-3">
+            <template x-for="(doc, index) in docsFiltrados" :key="index">
+                <div class="card-doc p-4 flex items-center justify-between" 
+                     :class="{'expiry-warning': esCaducado(doc.fecha), 'nomina-style': doc.categoria === 'NÓMINAS'}">
+                    <div class="flex items-center gap-4" @click="verDoc(doc)">
+                        <div class="p-3 bg-slate-800 rounded-2xl border border-white/5 text-blue-400">
+                            <span class="material-symbols-outlined" x-text="getIcon(doc.categoria, doc.esPDF)"></span>
+                        </div>
+                        <div>
+                            <h3 class="font-bold text-white text-sm" x-text="doc.nombre"></h3>
+                            <div class="flex items-center gap-2">
+                                <span class="text-[9px] font-black px-1.5 py-0.5 rounded bg-slate-700 text-slate-300 uppercase" x-text="doc.categoria"></span>
+                                <p class="text-[10px] text-slate-500" x-text="doc.fecha ? formatDate(doc.fecha) : 'Sin fecha'"></p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="flex gap-2">
+                        <button @click="verDoc(doc)" class="text-blue-400 p-2"><span class="material-symbols-outlined">visibility</span></button>
+                        <button @click="borrar(index)" class="text-slate-600 p-2"><span class="material-symbols-outlined">delete</span></button>
+                    </div>
+                </div>
+            </template>
+        </div>
+    </main>
+
+    <div x-show="viewImage" x-transition x-cloak class="fixed inset-0 z-50 bg-black flex flex-col p-4">
+        <div class="flex justify-between items-center mb-4">
+            <h2 class="text-white font-bold" x-text="selectedDoc?.nombre"></h2>
+            <button @click="viewImage = false" class="bg-white/10 p-2 rounded-full text-white"><span class="material-symbols-outlined">close</span></button>
+        </div>
+        <div class="flex-grow flex items-center justify-center">
+            <img :src="selectedDoc?.foto" class="max-w-full max-h-full rounded-lg">
+        </div>
+    </div>
+
+    <script>
+        function docApp() {
+            return {
+                showEditor: false,
+                viewImage: false,
+                selectedDoc: null,
+                filtro: 'TODOS',
+                categorias: ['TODOS', 'PERSONALES', 'BUS', 'NÓMINAS', 'SALUD', 'OTROS'],
+                docs: [],
+                nuevo: { nombre: '', categoria: 'PERSONALES', fecha: '' },
+                
+                init() {
+                    this.docs = JSON.parse(localStorage.getItem('docsafe_v1.1') || '[]');
+                },
+                
+                async capturar() {
+                    if(!this.nuevo.nombre) return alert("⚠️ Ponle un nombre");
+                    try {
+                        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+                        const video = document.createElement('video');
+                        video.srcObject = stream;
+                        await video.play();
+                        
+                        setTimeout(async () => {
+                            const canvas = document.createElement('canvas');
+                            canvas.width = video.videoWidth; canvas.height = video.videoHeight;
+                            canvas.getContext('2d').drawImage(video, 0, 0);
+                            const imgData = canvas.toDataURL('image/jpeg', 0.5);
+                            stream.getTracks().forEach(t => t.stop());
+                            
+                            this.docs.push({ ...this.nuevo, foto: imgData, esPDF: false });
+                            this.guardar();
+                        }, 800);
+                    } catch (e) { alert("Error cámara"); }
+                },
+
+                async subirArchivo(event) {
+                    if(!this.nuevo.nombre) return alert("⚠️ Ponle nombre");
+                    const file = event.target.files[0];
+                    const reader = new FileReader();
+                    reader.onload = (e) => {
+                        this.docs.push({ 
+                            ...this.nuevo, 
+                            foto: e.target.result, 
+                            esPDF: file.type === 'application/pdf' 
+                        });
+                        this.guardar();
+                    };
+                    reader.readAsDataURL(file);
+                },
+
+                guardar() {
+                    localStorage.setItem('docsafe_v1.1', JSON.stringify(this.docs));
+                    this.nuevo = { nombre: '', categoria: 'PERSONALES', fecha: '' };
+                    this.showEditor = false;
+                },
+
+                borrar(idx) { if(confirm("¿Borrar?")) { this.docs.splice(idx, 1); this.guardar(); }},
+                
+                verDoc(doc) {
+                    if(doc.esPDF) {
+                        const parts = doc.foto.split(';base64,');
+                        const blob = new Blob([new Uint8Array(atob(parts[1]).split('').map(c => c.charCodeAt(0)))], {type: 'application/pdf'});
+                        window.open(URL.createObjectURL(blob));
+                    } else {
+                        this.selectedDoc = doc;
+                        this.viewImage = true;
+                    }
+                },
+
+                formatDate(f) { return f.split('-').reverse().join('/'); },
+                
+                get docsFiltrados() {
+                    let f = (this.filtro === 'TODOS') ? this.docs : this.docs.filter(d => d.categoria === this.filtro);
+                    return f.sort((a,b) => new Date(b.fecha) - new Date(a.fecha));
+                },
+
+                esCaducado(fecha) {
+                    if(!fecha || this.filtro === 'NÓMINAS') return false;
+                    let exp = new Date(fecha);
+                    let limite = new Date();
+                    limite.setMonth(limite.getMonth() + 1);
+                    return exp < limite && exp > new Date(0); 
+                },
+
+                getIcon(cat, isPDF) {
+                    if(isPDF) return 'picture_as_pdf';
+                    if(cat === 'BUS') return 'directions_bus';
+                    if(cat === 'NÓMINAS') return 'payments';
+                    if(cat === 'SALUD') return 'medical_services';
+                    return 'description';
+                }
+            }
+        }
+    </script>
+</body>
+</html>
